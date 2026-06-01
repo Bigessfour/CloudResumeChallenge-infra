@@ -1,0 +1,44 @@
+# =============================================================================
+# Production Environment Variables - COPY TO terraform.tfvars
+# =============================================================================
+
+aws_region = "us-east-1"
+
+environment = "prod"
+
+# MUST BE GLOBALLY UNIQUE across all AWS accounts worldwide.
+# Good pattern: <yourname>-resume-<year> or <yourname>-cloudresume-prod
+# Example: bigessfour-resume-2026
+website_bucket_name = "YOUR_GLOBALLY_UNIQUE_WEBSITE_BUCKET_NAME"
+
+# Cheapest CloudFront option (recommended for Free Tier / personal resume)
+cloudfront_price_class = "PriceClass_100"
+
+# =============================================================================
+# CUSTOM DOMAIN CONFIGURATION (stephenmckitrick.com)
+# =============================================================================
+# Leave domain_name empty if you only want to use the default CloudFront domain for now.
+
+# Your primary domain (apex)
+domain_name = "stephenmckitrick.com"
+
+# Include www version (highly recommended)
+subject_alternative_names = ["www.stephenmckitrick.com"]
+
+# Set to true the very first time if you want Terraform to create the Route 53 hosted zone.
+# After the zone is created, you can set this back to false and use route53_zone_id instead.
+create_route53_zone = false
+
+# After first apply with create_route53_zone=true, copy the zone ID from outputs here
+# route53_zone_id = "Z0XXXXXXXXXXXXX"
+
+# Redirect www → apex at the CloudFront edge (best UX + SEO)
+enable_www_redirect = true
+
+# Visitor counter (API Gateway + Lambda + DynamoDB)
+enable_visitor_counter = true
+
+tags = {
+  Owner       = "Stephen McKitrick"
+  CostCenter  = "Personal"
+}

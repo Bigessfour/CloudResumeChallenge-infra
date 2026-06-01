@@ -1,0 +1,79 @@
+# =============================================================================
+# Terraform Apply Workflow
+# Runs on pushes to main (or manual trigger).
+# Strongly recommended: Protect the "prod" environment in GitHub settings
+# with required reviewers for true production safety.
+# =============================================================================
+
+name: Terraform Apply
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'bootstrap/**'
+      - 'environments/**'
+      - '.github/workflows/terraform-*.yml'
+      - 'versions.tf'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+
+    # GitHub Environment - add branch protection + required reviewers here
+    environment:
+      name: prod
+      url: ${{ steps.outputs.outputs.cloudfront_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: terraform-apply-${{ github.run_id }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ">=1.9.0"
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: environments/prod
+        run: terraform init -input=false
+
+      - name: Terraform Apply
+        working-directory: environments/prod
+        id: apply
+        run: |
+          terraform apply -input=false -auto-approve
+
+      - name: Capture Outputs
+        working-directory: environments/prod
+        id: outputs
+        run: |
+          CLOUDFRONT_DOMAIN=$(terraform output -raw cloudfront_domain_name)
+          echo "cloudfront_url=https://$CLOUDFRONT_DOMAIN" >> $GITHUB_OUTPUT
+          echo "CloudFront URL: https://$CLOUDFRONT_DOMAIN"
+
+      - name: Summary
+        run: |
+          echo "## ✅ Terraform Apply Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**CloudFront URL:** ${{ steps.outputs.outputs.cloudfront_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Your resume website is now live (or updated) behind CloudFront + OAC." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,57 @@
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Override files you don't intend to commit
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform variables that might contain sensitive values
+*.auto.tfvars
+*.auto.tfvars.json
+
+# Terraform plan files
+*.tfplan
+
+# Environment-specific tfvars (keep example only)
+environments/*/terraform.tfvars
+
+# IDE / Editor
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Lambda deployment artifacts
+lambda/**/*.zip
+
+# Local credentials / secrets
+*.pem
+.env
+.env.*
+
+# Trunk.io (if you want to commit some logs, remove this)
+.trunk/out/
+.trunk/logs/
+
+# Keep the example file
+!environments/prod/terraform.tfvars.example

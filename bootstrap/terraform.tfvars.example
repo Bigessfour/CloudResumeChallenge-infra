@@ -1,0 +1,28 @@
+# =============================================================================
+# Bootstrap Terraform Variables - COPY THIS FILE TO terraform.tfvars
+# =============================================================================
+
+aws_region = "us-east-1"
+
+# IMPORTANT: This must be globally unique across all AWS accounts.
+# Recommended pattern: <yourname>-cloudresume-tfstate-<account-id-short>
+# Example: bigessfour-cloudresume-tfstate-123456789012
+tfstate_bucket_name = "YOUR_UNIQUE_TFSTATE_BUCKET_NAME_HERE"
+
+tfstate_lock_table_name = "cloudresume-tf-locks"
+
+github_role_name = "github-actions-cloudresume-terraform"
+
+# This must match the bucket name you will use in environments/prod/terraform.tfvars
+# It is used here only to grant the GitHub IAM role permission to write to it.
+website_bucket_name = "YOUR_UNIQUE_WEBSITE_BUCKET_NAME_HERE"
+
+# Set to false if the GitHub OIDC provider already exists in this AWS account
+create_oidc_provider = true
+
+tags = {
+  Project     = "CloudResumeChallenge"
+  Environment = "bootstrap"
+  ManagedBy   = "Terraform"
+  Owner       = "Stephen McKitrick"
+}
