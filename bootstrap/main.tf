@@ -13,7 +13,7 @@ resource "aws_s3_bucket" "tfstate" {
   bucket = var.tfstate_bucket_name
 
   tags = merge(var.tags, {
-    Name = "Terraform State Bucket"
+    Name    = "Terraform State Bucket"
     Purpose = "Remote Terraform State"
   })
 }
@@ -123,13 +123,13 @@ data "aws_iam_policy_document" "github_assume_role" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Allow both the infra repo (for terraform) and frontend repo (for deploys)
+    # Allow both repos on main branch only (AWS OIDC best practice)
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:Bigessfour/CloudResumeChallenge-infra:*",
-        "repo:Bigessfour/CloudResumeChallenge-frontend:*",
+        "repo:Bigessfour/CloudResumeChallenge-infra:ref:refs/heads/main",
+        "repo:Bigessfour/CloudResumeChallenge-frontend:ref:refs/heads/main",
       ]
     }
   }
@@ -294,6 +294,8 @@ data "aws_iam_policy_document" "github_policy" {
       "lambda:PublishVersion",
       "lambda:UpdateFunctionCode",
       "lambda:UpdateFunctionConfiguration",
+      "lambda:PutFunctionConcurrency",
+      "lambda:DeleteFunctionConcurrency",
       "lambda:AddPermission",
       "lambda:RemovePermission",
       "lambda:GetPolicy",
@@ -305,9 +307,9 @@ data "aws_iam_policy_document" "github_policy" {
   }
 
   statement {
-    sid    = "LambdaPassRole"
-    effect = "Allow"
-    actions = ["iam:PassRole"]
+    sid       = "LambdaPassRole"
+    effect    = "Allow"
+    actions   = ["iam:PassRole"]
     resources = ["arn:aws:iam::*:role/cloudresume-*"]
     condition {
       test     = "StringEquals"
@@ -364,6 +366,47 @@ data "aws_iam_policy_document" "github_policy" {
       "logs:DeleteRetentionPolicy",
     ]
     resources = ["arn:aws:logs:*:*:log-group:/aws/lambda/cloudresume-*"]
+  }
+
+  statement {
+    sid    = "AccessAnalyzer"
+    effect = "Allow"
+    actions = [
+      "accessanalyzer:CreateAnalyzer",
+      "accessanalyzer:DeleteAnalyzer",
+      "accessanalyzer:GetAnalyzer",
+      "accessanalyzer:ListAnalyzers",
+      "accessanalyzer:TagResource",
+      "accessanalyzer:UntagResource",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "Budgets"
+    effect = "Allow"
+    actions = [
+      "budgets:ViewBudget",
+      "budgets:ModifyBudget",
+      "budgets:CreateBudgetAction",
+      "budgets:DeleteBudgetAction",
+      "budgets:UpdateBudgetAction",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "CloudWatchAlarms"
+    effect = "Allow"
+    actions = [
+      "cloudwatch:PutMetricAlarm",
+      "cloudwatch:DeleteAlarms",
+      "cloudwatch:DescribeAlarms",
+      "cloudwatch:TagResource",
+      "cloudwatch:UntagResource",
+      "cloudwatch:ListTagsForResource",
+    ]
+    resources = ["*"]
   }
 }
 

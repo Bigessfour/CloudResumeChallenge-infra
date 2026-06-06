@@ -92,3 +92,32 @@ variable "visitor_counter_function_name" {
   type        = string
   default     = "cloudresume-visitor-counter"
 }
+
+# =============================================================================
+# Security monitoring (free tier)
+# =============================================================================
+
+variable "budget_alert_email" {
+  description = "Email for AWS Budgets cost alerts. Leave empty to skip budget creation. Never commit — set in terraform.tfvars only."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "budget_limit_usd" {
+  description = "Monthly AWS cost budget limit in USD for alert notifications."
+  type        = string
+  default     = "10"
+}
+
+variable "budget_time_period_start" {
+  description = "Budget start time in YYYY-MM-DD_HH:MM format (UTC). Use the first day of the month when enabling budgets."
+  type        = string
+  default     = "2026-06-01_00:00"
+}
+
+variable "lambda_invocation_alarm_threshold" {
+  description = "Daily Lambda invocation count that triggers a CloudWatch abuse alarm."
+  type        = number
+  default     = 5000
+}

@@ -14,4 +14,5 @@ locals {
   )
 }
 
-# Future extension points — visitor counter lives in visitor_counter.tf
+# Visitor counter resources: visitor_counter.tf
+# Security monitoring: security.tf, budgets.tf

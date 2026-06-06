@@ -68,8 +68,41 @@ One-time (or rare) setup using local AWS credentials:
 | Static site | Private S3 bucket + CloudFront OAC | No public bucket access; only CloudFront can read objects |
 | HTTPS | ACM cert in `us-east-1` (CloudFront requirement) | DNS validation via Route 53 records |
 | Custom domain | `stephenmckitrick.com` + `www` redirect | CloudFront Function redirects www → apex |
-| Visitor counter | API Gateway HTTP API → Lambda → DynamoDB | Atomic `ADD` increment; CORS limited to site origins |
+| Visitor counter | API Gateway HTTP API → Lambda → DynamoDB | Atomic `ADD` increment; CORS limited to site origins; throttled; concurrency capped |
 | DNS (current) | Porkbun nameservers | Route 53 records exist for future NS cutover (~60 days) |
+
+## Security and resilience (free tier)
+
+Controls aligned with [AWS security documentation](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/welcome.html). Paid add-ons (WAF, Shield Advanced, GuardDuty, AWS Config) are intentionally not used on this personal portfolio.
+
+| Control | Implementation | AWS reference |
+|---------|----------------|---------------|
+| **Shield Standard** | Automatic DDoS protection on CloudFront and Route 53 | [Shield Standard overview](https://docs.aws.amazon.com/waf/latest/developerguide/ddos-standard-summary.html) |
+| **S3 Block Public Access** | All four settings on website and state buckets | [Block public access](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html) |
+| **S3 encryption + HTTPS-only policy** | SSE-S3 (AES256) + `DenyInsecureTransport` bucket statement | [S3 security best practices](https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html) |
+| **CloudFront OAC** | Private S3 origin; SigV4 signed requests only | [Restrict S3 access](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html) |
+| **Security response headers** | HSTS, XSS, frame deny, referrer policy via CloudFront policy | [Response headers policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/response-headers-policies.html) |
+| **GitHub OIDC** | No long-lived AWS keys in CI; temporary STS credentials | [GitHub Actions + IAM roles](https://aws.amazon.com/blogs/security/use-iam-roles-to-connect-github-actions-to-actions-in-aws/) |
+| **OIDC scoped to `main`** | Trust policy limits role assumption to `main` branch only | Same as above |
+| **API Gateway throttling** | HTTP API stage rate/burst limits (429 on excess) | [HTTP API throttling](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-throttling.html) |
+| **Lambda least privilege** | Execution role limited to DynamoDB `GetItem`/`UpdateItem` on counter table | IAM role in `visitor_counter.tf` |
+| **Lambda concurrency cap** | Reserved concurrency limits parallel executions during abuse | `visitor_counter.tf` |
+| **IAM Access Analyzer** | External-access analyzer detects unintended public/cross-account access | [Access Analyzer](https://docs.aws.amazon.com/IAM/latest/UserGuide/what-is-access-analyzer.html) |
+| **AWS Budgets alerts** | Monthly cost budget with email notifications (optional; email in tfvars only) | [AWS Budgets pricing](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/) |
+| **CloudWatch alarms** | Lambda error and high-invocation alarms on standard metrics | [CloudWatch pricing (free tier)](https://aws.amazon.com/cloudwatch/pricing/) |
+
+### Not used (paid or unnecessary for this project)
+
+- **AWS WAF** — `web_acl_id` remains null on CloudFront (`cdn.tf`)
+- **Shield Advanced** — subscription service; Shield Standard is sufficient
+- **GuardDuty / AWS Config** — ongoing cost; not required for static resume scope
+- **Access Analyzer internal/unused** — paid analyzer types excluded
+
+### GitHub supply-chain recommendations (configure in repo settings)
+
+- Branch protection on `main` with required CI checks
+- Secret scanning and Dependabot (free on public repos)
+- Manual approval on the infra repo `prod` environment before `terraform apply`
 
 ### Visitor counter flow
 

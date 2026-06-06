@@ -104,6 +104,8 @@ resource "aws_lambda_function" "visitor_counter" {
   timeout       = 10
   memory_size   = 128
 
+  reserved_concurrent_executions = 10
+
   filename         = data.archive_file.visitor_counter[0].output_path
   source_code_hash = data.archive_file.visitor_counter[0].output_base64sha256
 
@@ -181,8 +183,8 @@ resource "aws_apigatewayv2_stage" "visitor_counter" {
   auto_deploy = true
 
   default_route_settings {
-    throttling_burst_limit = 50
-    throttling_rate_limit  = 25
+    throttling_burst_limit = 10
+    throttling_rate_limit  = 5
   }
 
   tags = local.common_tags

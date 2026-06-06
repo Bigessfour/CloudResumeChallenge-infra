@@ -38,6 +38,12 @@ enable_www_redirect = true
 # Visitor counter (API Gateway + Lambda + DynamoDB)
 enable_visitor_counter = true
 
+# =============================================================================
+# SECURITY MONITORING (free tier — optional, set email in terraform.tfvars only)
+# =============================================================================
+# budget_alert_email = "your-email@example.com"
+# budget_limit_usd   = "10"
+
 tags = {
   Owner       = "Stephen McKitrick"
   CostCenter  = "Personal"
