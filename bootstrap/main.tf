@@ -307,12 +307,17 @@ data "aws_iam_policy_document" "github_policy" {
     resources = ["*"]
   }
 
-  # CloudWatch Logs — scoped writes on Lambda log groups
+  # CloudWatch Logs — scoped writes on Lambda log groups.
+  # Two ARN forms: bare group ARN (for tag/retention/group ops) and
+  # group:* (for stream-level ops like PutLogEvents/CreateLogStream).
   statement {
-    sid       = "LogsScoped"
-    effect    = "Allow"
-    actions   = ["logs:*"]
-    resources = ["arn:aws:logs:*:*:log-group:/aws/lambda/cloudresume-*:*"]
+    sid     = "LogsScoped"
+    effect  = "Allow"
+    actions = ["logs:*"]
+    resources = [
+      "arn:aws:logs:*:*:log-group:/aws/lambda/cloudresume-*",
+      "arn:aws:logs:*:*:log-group:/aws/lambda/cloudresume-*:*",
+    ]
   }
 
   # DescribeLogGroups must use "*" per AWS contract
