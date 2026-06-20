@@ -55,3 +55,12 @@ lambda/**/*.zip
 
 # Keep the example file
 !environments/prod/terraform.tfvars.example
+
+# Python virtual environments + test caches (lambda/)
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/
+*.pyc

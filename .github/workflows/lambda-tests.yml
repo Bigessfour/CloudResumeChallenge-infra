@@ -1,0 +1,59 @@
+# =============================================================================
+# Lambda Tests (Cloud Resume Challenge step 11)
+# Runs pytest against the visitor counter handler on every push / PR that
+# touches the Lambda code. Uses moto to mock DynamoDB so no AWS calls happen.
+# =============================================================================
+
+name: Lambda Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lambda/**"
+      - ".github/workflows/lambda-tests.yml"
+  pull_request:
+    paths:
+      - "lambda/**"
+      - ".github/workflows/lambda-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (visitor_counter)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: lambda/visitor_counter
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: lambda/visitor_counter/requirements-dev.txt
+
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: pytest -v --tb=short
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Lambda Tests" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Handler:** \`lambda/visitor_counter/handler.py\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Test file:** \`lambda/visitor_counter/test_handler.py\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Mock backend:** moto (DynamoDB)" >> "$GITHUB_STEP_SUMMARY"

@@ -9,10 +9,11 @@ name: Terraform Plan
 on:
   pull_request:
     paths:
-      - 'bootstrap/**'
-      - 'environments/**'
-      - '.github/workflows/terraform-*.yml'
-      - 'versions.tf'
+      - "bootstrap/**"
+      - "environments/**"
+      - "lambda/**"
+      - ".github/workflows/terraform-*.yml"
+      - "versions.tf"
   workflow_dispatch:
 
 permissions:
@@ -22,6 +23,11 @@ permissions:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  # Inject deployment-specific Terraform variables from GitHub Actions vars
+  # (kept out of source so the repo stays a fork-friendly template).
+  TF_VAR_website_bucket_name: ${{ vars.WEBSITE_BUCKET_NAME }}
+  TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+  TF_VAR_subject_alternative_names: ${{ vars.SUBJECT_ALTERNATIVE_NAMES }}
 
 jobs:
   terraform-plan:
