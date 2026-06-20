@@ -288,9 +288,28 @@ The folder structure is designed for easy extension:
 **"Bucket name already exists"**  
 S3 bucket names are global. Change `website_bucket_name` to something more unique.
 
-**GitHub Actions fails with "AccessDenied"**  
+**GitHub Actions fails with "AccessDenied"**
+
 - Make sure `AWS_ROLE_ARN` repository variable is set correctly
 - The role trust policy may need a few minutes to propagate after creation
+- The IAM policy attached to the OIDC role lives in `bootstrap/main.tf`. **The CI
+  workflow does NOT apply `bootstrap/`** (chicken-and-egg: bootstrap creates the
+  role the workflow uses). When `terraform apply` reports new `AccessDenied`
+  errors, edit `bootstrap/main.tf`, commit, then run `terraform apply` inside
+  `bootstrap/` locally with your own AWS credentials so the policy update lands.
+
+**Domain still at previous registrar (Porkbun, Namecheap, etc.)**
+
+- The Route 53 records in `environments/prod/dns.tf` only deploy when a hosted
+  zone is available (`create_route53_zone = true` or `route53_zone_id` set).
+- When DNS is still at the original registrar (e.g. during the 60-day ICANN
+  registrar-transfer lock), leave both unset — `local.manage_route53_records`
+  resolves to `false` and every Route 53 record short-circuits with `count = 0`.
+- The ACM certificate stays in state and the CloudFront distribution keeps
+  using it; validation CNAMEs must be added manually at the current registrar
+  if the cert ever needs to be re-issued.
+- After the registrar lock expires, change nameservers, set
+  `create_route53_zone = true`, and re-apply.
 
 **CloudFront shows old content**  
 Run an invalidation:

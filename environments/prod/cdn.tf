@@ -151,10 +151,14 @@ resource "aws_cloudfront_distribution" "website" {
 
   # When using a custom domain we must use the validated ACM cert.
   # When not using a custom domain we use the default CloudFront certificate.
+  # Prefer the explicit validation resource (proves DNS validation completed),
+  # but fall back to the cert resource directly when Route 53 isn't managing the
+  # zone (e.g. domain currently at Porkbun) — the cert is still ISSUED, it was
+  # validated externally.
   dynamic "viewer_certificate" {
     for_each = var.domain_name != "" ? [1] : []
     content {
-      acm_certificate_arn      = aws_acm_certificate_validation.website[0].certificate_arn
+      acm_certificate_arn      = local.manage_route53_records ? aws_acm_certificate_validation.website[0].certificate_arn : aws_acm_certificate.website[0].arn
       ssl_support_method       = "sni-only"
       minimum_protocol_version = "TLSv1.2_2021"
     }

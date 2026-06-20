@@ -58,7 +58,9 @@ output "website_url" {
 
 output "acm_certificate_arn" {
   description = "ACM Certificate ARN (use this if you need it for other services later)"
-  value       = var.domain_name != "" ? aws_acm_certificate_validation.website[0].certificate_arn : null
+  value = var.domain_name != "" ? (
+    local.manage_route53_records ? aws_acm_certificate_validation.website[0].certificate_arn : aws_acm_certificate.website[0].arn
+  ) : null
 }
 
 output "route53_zone_id" {

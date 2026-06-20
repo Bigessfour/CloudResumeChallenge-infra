@@ -183,13 +183,57 @@ data "aws_iam_policy_document" "github_policy" {
     resources = [aws_dynamodb_table.tf_lock.arn]
   }
 
-  # Website S3 bucket (created later in prod) - full control for deploys
+  # Website S3 bucket (created/managed by prod environment + frontend deploys)
+  # Terraform needs to read & write every bucket-level config; Actions deploys
+  # need object CRUD. Both fall under the same bucket ARN scope.
   statement {
     sid    = "WebsiteBucket"
     effect = "Allow"
     actions = [
+      # Lifecycle
+      "s3:CreateBucket",
+      "s3:DeleteBucket",
       "s3:ListBucket",
       "s3:GetBucketLocation",
+      # Policy & access control
+      "s3:GetBucketPolicy",
+      "s3:PutBucketPolicy",
+      "s3:DeleteBucketPolicy",
+      "s3:GetBucketPolicyStatus",
+      "s3:GetBucketAcl",
+      "s3:PutBucketAcl",
+      "s3:GetBucketPublicAccessBlock",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:GetBucketOwnershipControls",
+      "s3:PutBucketOwnershipControls",
+      # Encryption & versioning
+      "s3:GetEncryptionConfiguration",
+      "s3:PutEncryptionConfiguration",
+      "s3:GetBucketVersioning",
+      "s3:PutBucketVersioning",
+      # CORS, website, logging, lifecycle, notifications, replication
+      "s3:GetBucketCORS",
+      "s3:PutBucketCORS",
+      "s3:GetBucketWebsite",
+      "s3:PutBucketWebsite",
+      "s3:DeleteBucketWebsite",
+      "s3:GetBucketLogging",
+      "s3:PutBucketLogging",
+      "s3:GetLifecycleConfiguration",
+      "s3:PutLifecycleConfiguration",
+      "s3:GetBucketNotification",
+      "s3:PutBucketNotification",
+      "s3:GetReplicationConfiguration",
+      "s3:PutReplicationConfiguration",
+      "s3:GetBucketRequestPayment",
+      "s3:PutBucketRequestPayment",
+      "s3:GetAccelerateConfiguration",
+      "s3:PutAccelerateConfiguration",
+      "s3:GetBucketObjectLockConfiguration",
+      "s3:PutBucketObjectLockConfiguration",
+      # Tags
+      "s3:GetBucketTagging",
+      "s3:PutBucketTagging",
     ]
     resources = ["arn:aws:s3:::${var.website_bucket_name}"]
   }
@@ -199,8 +243,13 @@ data "aws_iam_policy_document" "github_policy" {
     effect = "Allow"
     actions = [
       "s3:GetObject",
+      "s3:GetObjectTagging",
+      "s3:GetObjectVersion",
       "s3:PutObject",
+      "s3:PutObjectTagging",
+      "s3:PutObjectAcl",
       "s3:DeleteObject",
+      "s3:DeleteObjectVersion",
       "s3:ListBucketMultipartUploads",
       "s3:ListMultipartUploadParts",
       "s3:AbortMultipartUpload",
@@ -208,17 +257,50 @@ data "aws_iam_policy_document" "github_policy" {
     resources = ["arn:aws:s3:::${var.website_bucket_name}/*"]
   }
 
-  # CloudFront permissions (invalidate + describe)
+  # CloudFront permissions — distributions, OAC, response headers policies,
+  # CloudFront Functions, invalidations, and tag management.
   statement {
     sid    = "CloudFront"
     effect = "Allow"
     actions = [
+      # Distributions
+      "cloudfront:CreateDistribution",
+      "cloudfront:GetDistribution",
+      "cloudfront:GetDistributionConfig",
+      "cloudfront:UpdateDistribution",
+      "cloudfront:DeleteDistribution",
+      "cloudfront:ListDistributions",
+      # Invalidations
       "cloudfront:CreateInvalidation",
       "cloudfront:GetInvalidation",
       "cloudfront:ListInvalidations",
-      "cloudfront:GetDistribution",
-      "cloudfront:GetDistributionConfig",
-      "cloudfront:ListDistributions",
+      # Origin Access Controls (modern OAC replaces OAI)
+      "cloudfront:CreateOriginAccessControl",
+      "cloudfront:GetOriginAccessControl",
+      "cloudfront:GetOriginAccessControlConfig",
+      "cloudfront:UpdateOriginAccessControl",
+      "cloudfront:DeleteOriginAccessControl",
+      "cloudfront:ListOriginAccessControls",
+      # Response Headers Policies (security headers)
+      "cloudfront:CreateResponseHeadersPolicy",
+      "cloudfront:GetResponseHeadersPolicy",
+      "cloudfront:GetResponseHeadersPolicyConfig",
+      "cloudfront:UpdateResponseHeadersPolicy",
+      "cloudfront:DeleteResponseHeadersPolicy",
+      "cloudfront:ListResponseHeadersPolicies",
+      # CloudFront Functions (www → apex redirect)
+      "cloudfront:CreateFunction",
+      "cloudfront:DescribeFunction",
+      "cloudfront:GetFunction",
+      "cloudfront:UpdateFunction",
+      "cloudfront:DeleteFunction",
+      "cloudfront:PublishFunction",
+      "cloudfront:ListFunctions",
+      "cloudfront:TestFunction",
+      # Tagging (Terraform always reads tags on refresh)
+      "cloudfront:TagResource",
+      "cloudfront:UntagResource",
+      "cloudfront:ListTagsForResource",
     ]
     resources = ["*"]
   }
@@ -233,6 +315,8 @@ data "aws_iam_policy_document" "github_policy" {
       "acm:DeleteCertificate",
       "acm:ListCertificates",
       "acm:AddTagsToCertificate",
+      "acm:RemoveTagsFromCertificate",
+      "acm:ListTagsForCertificate", # required by Terraform refresh
     ]
     resources = ["*"]
   }
@@ -290,18 +374,33 @@ data "aws_iam_policy_document" "github_policy" {
       "lambda:DeleteFunction",
       "lambda:GetFunction",
       "lambda:GetFunctionConfiguration",
+      "lambda:GetFunctionCodeSigningConfig", # required by Terraform refresh
+      "lambda:PutFunctionCodeSigningConfig",
+      "lambda:DeleteFunctionCodeSigningConfig",
       "lambda:ListVersionsByFunction",
       "lambda:PublishVersion",
       "lambda:UpdateFunctionCode",
       "lambda:UpdateFunctionConfiguration",
       "lambda:PutFunctionConcurrency",
       "lambda:DeleteFunctionConcurrency",
+      "lambda:GetFunctionConcurrency",
       "lambda:AddPermission",
       "lambda:RemovePermission",
       "lambda:GetPolicy",
       "lambda:TagResource",
       "lambda:UntagResource",
       "lambda:ListTags",
+      # Function URLs (in case we add them)
+      "lambda:CreateFunctionUrlConfig",
+      "lambda:GetFunctionUrlConfig",
+      "lambda:UpdateFunctionUrlConfig",
+      "lambda:DeleteFunctionUrlConfig",
+      # Aliases
+      "lambda:CreateAlias",
+      "lambda:GetAlias",
+      "lambda:UpdateAlias",
+      "lambda:DeleteAlias",
+      "lambda:ListAliases",
     ]
     resources = ["arn:aws:lambda:*:*:function:cloudresume-*"]
   }
@@ -352,20 +451,32 @@ data "aws_iam_policy_document" "github_policy" {
     resources = ["*"]
   }
 
+  # CloudWatch Logs — scoped operations (write/delete) restricted to our log
+  # groups; list operations (DescribeLogGroups) require "*" per AWS contract.
   statement {
-    sid    = "CloudWatchLogs"
+    sid    = "CloudWatchLogsScoped"
     effect = "Allow"
     actions = [
       "logs:CreateLogGroup",
       "logs:DeleteLogGroup",
-      "logs:DescribeLogGroups",
       "logs:ListTagsForResource",
       "logs:TagResource",
       "logs:UntagResource",
       "logs:PutRetentionPolicy",
       "logs:DeleteRetentionPolicy",
+      "logs:DescribeLogStreams",
+      "logs:CreateLogStream",
     ]
-    resources = ["arn:aws:logs:*:*:log-group:/aws/lambda/cloudresume-*"]
+    resources = ["arn:aws:logs:*:*:log-group:/aws/lambda/cloudresume-*:*"]
+  }
+
+  statement {
+    sid    = "CloudWatchLogsList"
+    effect = "Allow"
+    actions = [
+      "logs:DescribeLogGroups", # AWS only permits this on "*"
+    ]
+    resources = ["*"]
   }
 
   statement {
