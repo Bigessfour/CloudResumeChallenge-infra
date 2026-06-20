@@ -24,6 +24,7 @@ override.tf.json
 
 # Environment-specific tfvars (keep example only)
 environments/*/terraform.tfvars
+bootstrap/terraform.tfvars
 
 # IDE / Editor
 .idea/

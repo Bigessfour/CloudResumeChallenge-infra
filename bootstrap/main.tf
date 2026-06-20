@@ -145,10 +145,11 @@ resource "aws_iam_role" "github_actions" {
 }
 
 # ------------------------------------------------------------------------------
-# IAM Policy for the GitHub Role (Terraform + Website operations)
+# IAM Policy A — Terraform state plane (small, ~1 KB)
+# Split out from the main service policy because IAM customer-managed policy
+# documents are capped at 6144 bytes each and the combined doc exceeded that.
 # ------------------------------------------------------------------------------
-data "aws_iam_policy_document" "github_policy" {
-  # Terraform state bucket access
+data "aws_iam_policy_document" "github_state_policy" {
   statement {
     sid    = "TerraformStateBucket"
     effect = "Allow"
@@ -170,7 +171,6 @@ data "aws_iam_policy_document" "github_policy" {
     resources = ["${aws_s3_bucket.tfstate.arn}/*"]
   }
 
-  # DynamoDB state locking
   statement {
     sid    = "TerraformStateLocking"
     effect = "Allow"
@@ -183,121 +183,44 @@ data "aws_iam_policy_document" "github_policy" {
     resources = [aws_dynamodb_table.tf_lock.arn]
   }
 
-  # Website S3 bucket (created/managed by prod environment + frontend deploys)
-  # Terraform needs to read & write every bucket-level config; Actions deploys
-  # need object CRUD. Both fall under the same bucket ARN scope.
   statement {
-    sid    = "WebsiteBucket"
+    sid    = "ReadAccountInfo"
     effect = "Allow"
     actions = [
-      # Lifecycle
-      "s3:CreateBucket",
-      "s3:DeleteBucket",
-      "s3:ListBucket",
-      "s3:GetBucketLocation",
-      # Policy & access control
-      "s3:GetBucketPolicy",
-      "s3:PutBucketPolicy",
-      "s3:DeleteBucketPolicy",
-      "s3:GetBucketPolicyStatus",
-      "s3:GetBucketAcl",
-      "s3:PutBucketAcl",
-      "s3:GetBucketPublicAccessBlock",
-      "s3:PutBucketPublicAccessBlock",
-      "s3:GetBucketOwnershipControls",
-      "s3:PutBucketOwnershipControls",
-      # Encryption & versioning
-      "s3:GetEncryptionConfiguration",
-      "s3:PutEncryptionConfiguration",
-      "s3:GetBucketVersioning",
-      "s3:PutBucketVersioning",
-      # CORS, website, logging, lifecycle, notifications, replication
-      "s3:GetBucketCORS",
-      "s3:PutBucketCORS",
-      "s3:GetBucketWebsite",
-      "s3:PutBucketWebsite",
-      "s3:DeleteBucketWebsite",
-      "s3:GetBucketLogging",
-      "s3:PutBucketLogging",
-      "s3:GetLifecycleConfiguration",
-      "s3:PutLifecycleConfiguration",
-      "s3:GetBucketNotification",
-      "s3:PutBucketNotification",
-      "s3:GetReplicationConfiguration",
-      "s3:PutReplicationConfiguration",
-      "s3:GetBucketRequestPayment",
-      "s3:PutBucketRequestPayment",
-      "s3:GetAccelerateConfiguration",
-      "s3:PutAccelerateConfiguration",
-      "s3:GetBucketObjectLockConfiguration",
-      "s3:PutBucketObjectLockConfiguration",
-      # Tags
-      "s3:GetBucketTagging",
-      "s3:PutBucketTagging",
+      "sts:GetCallerIdentity",
+      "iam:ListOpenIDConnectProviders",
     ]
-    resources = ["arn:aws:s3:::${var.website_bucket_name}"]
+    resources = ["*"]
   }
+}
 
+# ------------------------------------------------------------------------------
+# IAM Policy B — AWS service plane (larger, all production resources)
+# ------------------------------------------------------------------------------
+data "aws_iam_policy_document" "github_policy" {
+  # Website S3 bucket — full control bounded to the single bucket ARN.
+  # Action wildcard is safe because resources are scoped to one bucket name.
   statement {
-    sid    = "WebsiteObjects"
-    effect = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:GetObjectTagging",
-      "s3:GetObjectVersion",
-      "s3:PutObject",
-      "s3:PutObjectTagging",
-      "s3:PutObjectAcl",
-      "s3:DeleteObject",
-      "s3:DeleteObjectVersion",
-      "s3:ListBucketMultipartUploads",
-      "s3:ListMultipartUploadParts",
-      "s3:AbortMultipartUpload",
+    sid     = "WebsiteBucket"
+    effect  = "Allow"
+    actions = ["s3:*"]
+    resources = [
+      "arn:aws:s3:::${var.website_bucket_name}",
+      "arn:aws:s3:::${var.website_bucket_name}/*",
     ]
-    resources = ["arn:aws:s3:::${var.website_bucket_name}/*"]
   }
 
-  # CloudFront permissions — distributions, OAC, response headers policies,
-  # CloudFront Functions, invalidations, and tag management.
+  # CloudFront — distributions, OAC, response headers policies, functions,
+  # invalidations, and tags. Global resource so we keep tight action wildcards.
   statement {
     sid    = "CloudFront"
     effect = "Allow"
     actions = [
-      # Distributions
-      "cloudfront:CreateDistribution",
-      "cloudfront:GetDistribution",
-      "cloudfront:GetDistributionConfig",
-      "cloudfront:UpdateDistribution",
-      "cloudfront:DeleteDistribution",
-      "cloudfront:ListDistributions",
-      # Invalidations
-      "cloudfront:CreateInvalidation",
-      "cloudfront:GetInvalidation",
-      "cloudfront:ListInvalidations",
-      # Origin Access Controls (modern OAC replaces OAI)
-      "cloudfront:CreateOriginAccessControl",
-      "cloudfront:GetOriginAccessControl",
-      "cloudfront:GetOriginAccessControlConfig",
-      "cloudfront:UpdateOriginAccessControl",
-      "cloudfront:DeleteOriginAccessControl",
-      "cloudfront:ListOriginAccessControls",
-      # Response Headers Policies (security headers)
-      "cloudfront:CreateResponseHeadersPolicy",
-      "cloudfront:GetResponseHeadersPolicy",
-      "cloudfront:GetResponseHeadersPolicyConfig",
-      "cloudfront:UpdateResponseHeadersPolicy",
-      "cloudfront:DeleteResponseHeadersPolicy",
-      "cloudfront:ListResponseHeadersPolicies",
-      # CloudFront Functions (www → apex redirect)
-      "cloudfront:CreateFunction",
-      "cloudfront:DescribeFunction",
-      "cloudfront:GetFunction",
-      "cloudfront:UpdateFunction",
-      "cloudfront:DeleteFunction",
-      "cloudfront:PublishFunction",
-      "cloudfront:ListFunctions",
-      "cloudfront:TestFunction",
-      # Tagging (Terraform always reads tags on refresh)
+      "cloudfront:*Distribution*",
+      "cloudfront:*Invalidation*",
+      "cloudfront:*OriginAccessControl*",
+      "cloudfront:*ResponseHeadersPolic*",
+      "cloudfront:*Function*",
       "cloudfront:TagResource",
       "cloudfront:UntagResource",
       "cloudfront:ListTagsForResource",
@@ -305,23 +228,20 @@ data "aws_iam_policy_document" "github_policy" {
     resources = ["*"]
   }
 
-  # ACM Certificate management (for custom domains)
+  # ACM (us-east-1 cert for CloudFront)
   statement {
-    sid    = "ACMCertificates"
+    sid    = "ACM"
     effect = "Allow"
     actions = [
-      "acm:RequestCertificate",
-      "acm:DescribeCertificate",
-      "acm:DeleteCertificate",
-      "acm:ListCertificates",
+      "acm:*Certificate*",
       "acm:AddTagsToCertificate",
       "acm:RemoveTagsFromCertificate",
-      "acm:ListTagsForCertificate", # required by Terraform refresh
+      "acm:ListTagsForCertificate",
     ]
     resources = ["*"]
   }
 
-  # Route 53 for DNS records and ACM validation
+  # Route 53 DNS records (only used when zone is in AWS; harmless otherwise)
   statement {
     sid    = "Route53"
     effect = "Allow"
@@ -335,76 +255,23 @@ data "aws_iam_policy_document" "github_policy" {
     resources = ["*"]
   }
 
-  # Basic permissions needed by Terraform to read AWS account info
+  # DynamoDB — bounded to cloudresume-* tables
   statement {
-    sid    = "ReadAccountInfo"
-    effect = "Allow"
-    actions = [
-      "sts:GetCallerIdentity",
-      "iam:ListOpenIDConnectProviders",
-    ]
-    resources = ["*"]
-  }
-
-  # Visitor counter + serverless resources (prod environment)
-  statement {
-    sid    = "DynamoDBTables"
-    effect = "Allow"
-    actions = [
-      "dynamodb:CreateTable",
-      "dynamodb:DeleteTable",
-      "dynamodb:DescribeTable",
-      "dynamodb:DescribeContinuousBackups",
-      "dynamodb:DescribeTimeToLive",
-      "dynamodb:ListTagsOfResource",
-      "dynamodb:TagResource",
-      "dynamodb:UntagResource",
-      "dynamodb:UpdateTable",
-      "dynamodb:UpdateContinuousBackups",
-      "dynamodb:UpdateTimeToLive",
-    ]
+    sid       = "DynamoDB"
+    effect    = "Allow"
+    actions   = ["dynamodb:*"]
     resources = ["arn:aws:dynamodb:*:*:table/cloudresume-*"]
   }
 
+  # Lambda — bounded to cloudresume-* functions
   statement {
-    sid    = "LambdaFunctions"
-    effect = "Allow"
-    actions = [
-      "lambda:CreateFunction",
-      "lambda:DeleteFunction",
-      "lambda:GetFunction",
-      "lambda:GetFunctionConfiguration",
-      "lambda:GetFunctionCodeSigningConfig", # required by Terraform refresh
-      "lambda:PutFunctionCodeSigningConfig",
-      "lambda:DeleteFunctionCodeSigningConfig",
-      "lambda:ListVersionsByFunction",
-      "lambda:PublishVersion",
-      "lambda:UpdateFunctionCode",
-      "lambda:UpdateFunctionConfiguration",
-      "lambda:PutFunctionConcurrency",
-      "lambda:DeleteFunctionConcurrency",
-      "lambda:GetFunctionConcurrency",
-      "lambda:AddPermission",
-      "lambda:RemovePermission",
-      "lambda:GetPolicy",
-      "lambda:TagResource",
-      "lambda:UntagResource",
-      "lambda:ListTags",
-      # Function URLs (in case we add them)
-      "lambda:CreateFunctionUrlConfig",
-      "lambda:GetFunctionUrlConfig",
-      "lambda:UpdateFunctionUrlConfig",
-      "lambda:DeleteFunctionUrlConfig",
-      # Aliases
-      "lambda:CreateAlias",
-      "lambda:GetAlias",
-      "lambda:UpdateAlias",
-      "lambda:DeleteAlias",
-      "lambda:ListAliases",
-    ]
+    sid       = "Lambda"
+    effect    = "Allow"
+    actions   = ["lambda:*"]
     resources = ["arn:aws:lambda:*:*:function:cloudresume-*"]
   }
 
+  # IAM PassRole — only Lambda execution roles
   statement {
     sid       = "LambdaPassRole"
     effect    = "Allow"
@@ -417,95 +284,59 @@ data "aws_iam_policy_document" "github_policy" {
     }
   }
 
+  # IAM role lifecycle — bounded to cloudresume-* roles
   statement {
-    sid    = "LambdaExecutionRoles"
-    effect = "Allow"
-    actions = [
-      "iam:CreateRole",
-      "iam:DeleteRole",
-      "iam:GetRole",
-      "iam:UpdateRole",
-      "iam:AttachRolePolicy",
-      "iam:DetachRolePolicy",
-      "iam:PutRolePolicy",
-      "iam:DeleteRolePolicy",
-      "iam:GetRolePolicy",
-      "iam:ListRolePolicies",
-      "iam:ListAttachedRolePolicies",
-      "iam:TagRole",
-      "iam:UntagRole",
-    ]
+    sid       = "LambdaExecutionRoles"
+    effect    = "Allow"
+    actions   = ["iam:*Role*"]
     resources = ["arn:aws:iam::*:role/cloudresume-*"]
   }
 
+  # API Gateway HTTP API
   statement {
-    sid    = "APIGateway"
-    effect = "Allow"
-    actions = [
-      "apigateway:GET",
-      "apigateway:POST",
-      "apigateway:PUT",
-      "apigateway:PATCH",
-      "apigateway:DELETE",
-    ]
+    sid       = "APIGateway"
+    effect    = "Allow"
+    actions   = ["apigateway:*"]
     resources = ["*"]
   }
 
-  # CloudWatch Logs — scoped operations (write/delete) restricted to our log
-  # groups; list operations (DescribeLogGroups) require "*" per AWS contract.
+  # CloudWatch Logs — scoped writes on Lambda log groups
   statement {
-    sid    = "CloudWatchLogsScoped"
-    effect = "Allow"
-    actions = [
-      "logs:CreateLogGroup",
-      "logs:DeleteLogGroup",
-      "logs:ListTagsForResource",
-      "logs:TagResource",
-      "logs:UntagResource",
-      "logs:PutRetentionPolicy",
-      "logs:DeleteRetentionPolicy",
-      "logs:DescribeLogStreams",
-      "logs:CreateLogStream",
-    ]
+    sid       = "LogsScoped"
+    effect    = "Allow"
+    actions   = ["logs:*"]
     resources = ["arn:aws:logs:*:*:log-group:/aws/lambda/cloudresume-*:*"]
   }
 
+  # DescribeLogGroups must use "*" per AWS contract
   statement {
-    sid    = "CloudWatchLogsList"
-    effect = "Allow"
-    actions = [
-      "logs:DescribeLogGroups", # AWS only permits this on "*"
-    ]
+    sid       = "LogsDescribe"
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogGroups"]
     resources = ["*"]
   }
 
+  # IAM Access Analyzer (free-tier security monitoring)
   statement {
     sid    = "AccessAnalyzer"
     effect = "Allow"
     actions = [
-      "accessanalyzer:CreateAnalyzer",
-      "accessanalyzer:DeleteAnalyzer",
-      "accessanalyzer:GetAnalyzer",
-      "accessanalyzer:ListAnalyzers",
+      "accessanalyzer:*Analyzer*",
       "accessanalyzer:TagResource",
       "accessanalyzer:UntagResource",
     ]
     resources = ["*"]
   }
 
+  # AWS Budgets (cost alerts)
   statement {
-    sid    = "Budgets"
-    effect = "Allow"
-    actions = [
-      "budgets:ViewBudget",
-      "budgets:ModifyBudget",
-      "budgets:CreateBudgetAction",
-      "budgets:DeleteBudgetAction",
-      "budgets:UpdateBudgetAction",
-    ]
+    sid       = "Budgets"
+    effect    = "Allow"
+    actions   = ["budgets:*Budget*"]
     resources = ["*"]
   }
 
+  # CloudWatch Alarms (abuse/cost guards)
   statement {
     sid    = "CloudWatchAlarms"
     effect = "Allow"
@@ -531,4 +362,18 @@ resource "aws_iam_policy" "github_actions" {
 resource "aws_iam_role_policy_attachment" "github_actions" {
   role       = aws_iam_role.github_actions.name
   policy_arn = aws_iam_policy.github_actions.arn
+}
+
+# Second policy holds Terraform state plane perms (see comment on
+# data.aws_iam_policy_document.github_state_policy for why we split).
+resource "aws_iam_policy" "github_actions_state" {
+  name   = "${var.github_role_name}-state-policy"
+  policy = data.aws_iam_policy_document.github_state_policy.json
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_state" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.github_actions_state.arn
 }
