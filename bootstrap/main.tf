@@ -123,13 +123,20 @@ data "aws_iam_policy_document" "github_assume_role" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Allow both repos on main branch only (AWS OIDC best practice)
+    # Allow both repos. Two sub-claim shapes per repo:
+    #   - ref:refs/heads/main           — jobs triggered by push to main with no environment
+    #     (e.g. the Lambda pytest gate job, frontend deploy on push)
+    #   - environment:prod              — jobs scoped to the GitHub "prod" environment
+    #     (e.g. terraform-apply, where the environment's branch protection
+    #     and required reviewers act as the real production guard)
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
         "repo:Bigessfour/CloudResumeChallenge-infra:ref:refs/heads/main",
+        "repo:Bigessfour/CloudResumeChallenge-infra:environment:prod",
         "repo:Bigessfour/CloudResumeChallenge-frontend:ref:refs/heads/main",
+        "repo:Bigessfour/CloudResumeChallenge-frontend:environment:prod",
       ]
     }
   }
