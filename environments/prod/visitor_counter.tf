@@ -104,7 +104,12 @@ resource "aws_lambda_function" "visitor_counter" {
   timeout       = 10
   memory_size   = 128
 
-  reserved_concurrent_executions = 10
+  # No reserved_concurrent_executions: the account's total concurrency quota
+  # is 10 (new-account default), and AWS requires UnreservedConcurrentExecutions
+  # to stay >= 10 always — so any reservation here fails. Leaving this unset
+  # lets the function share the account-wide pool, which is fine for a
+  # low-traffic visitor counter. Request a Lambda concurrency increase from
+  # AWS Support if you ever need stronger isolation.
 
   filename         = data.archive_file.visitor_counter[0].output_path
   source_code_hash = data.archive_file.visitor_counter[0].output_base64sha256

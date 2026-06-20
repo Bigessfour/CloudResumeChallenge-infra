@@ -328,14 +328,16 @@ data "aws_iam_policy_document" "github_policy" {
     resources = ["*"]
   }
 
-  # IAM Access Analyzer (free-tier security monitoring)
+  # IAM Access Analyzer (free-tier security monitoring).
+  # The IAM service prefix uses a hyphen: access-analyzer (not accessanalyzer).
   statement {
     sid    = "AccessAnalyzer"
     effect = "Allow"
     actions = [
-      "accessanalyzer:*Analyzer*",
-      "accessanalyzer:TagResource",
-      "accessanalyzer:UntagResource",
+      "access-analyzer:*Analyzer*",
+      "access-analyzer:TagResource",
+      "access-analyzer:UntagResource",
+      "access-analyzer:ListTagsForResource",
     ]
     resources = ["*"]
   }
