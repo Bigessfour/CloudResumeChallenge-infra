@@ -28,9 +28,8 @@ bootstrap/terraform.tfvars
 
 # IDE / Editor
 .idea/
-.vscode/*
-!.vscode/settings.json
-!.vscode/extensions.json
+.vscode/
+.cursor/
 *.swp
 *.swo
 *~

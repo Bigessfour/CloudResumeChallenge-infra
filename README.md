@@ -1,21 +1,47 @@
 # CloudResumeChallenge-infra
 
-Production-ready Terraform infrastructure for the **Cloud Resume Challenge** (AWS Free Tier).
+[![Terraform Plan](https://github.com/Bigessfour/CloudResumeChallenge-infra/actions/workflows/terraform-plan.yml/badge.svg)](https://github.com/Bigessfour/CloudResumeChallenge-infra/actions/workflows/terraform-plan.yml)
+[![Terraform Apply](https://github.com/Bigessfour/CloudResumeChallenge-infra/actions/workflows/terraform-apply.yml/badge.svg)](https://github.com/Bigessfour/CloudResumeChallenge-infra/actions/workflows/terraform-apply.yml)
+[![Live: stephenmckitrick.com](https://img.shields.io/badge/live-stephenmckitrick.com-22d3ee?logo=amazonaws&logoColor=white)](https://stephenmckitrick.com)
+[![AWS](https://img.shields.io/badge/AWS-serverless-FF9900?logo=amazonaws&logoColor=white)](https://stephenmckitrick.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-This repo manages the AWS resources for hosting a static resume website using S3 + CloudFront with Origin Access Control (OAC) for maximum security.
+Production Terraform for the **Cloud Resume Challenge** (AWS Free Tier): private S3 + CloudFront OAC, custom domain, and a live serverless visitor counter.
 
-## Architecture (Current)
+**Live site:** [https://stephenmckitrick.com](https://stephenmckitrick.com) · **Frontend:** [CloudResumeChallenge-frontend](https://github.com/Bigessfour/CloudResumeChallenge-frontend)
 
-- **S3 bucket** (private, no public access) — stores the static website files
-- **CloudFront distribution** with Origin Access Control (OAC) — serves content securely over HTTPS
-- **Terraform remote state** in S3 with DynamoDB locking (created in bootstrap)
-- **GitHub Actions OIDC** — zero long-lived AWS credentials
-- **Visitor counter** — API Gateway HTTP API + Lambda + DynamoDB
-- **Custom domain** — ACM certificate, Route 53 records, www → apex redirect
+## What this demonstrates for employers
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams, CI/CD, and runbooks.
+- Modular IaC: `bootstrap/` (state + OIDC) separate from `environments/prod/`
+- Security defaults: private bucket, Origin Access Control, HTTPS-only, security headers, least-privilege IAM
+- GitHub Actions OIDC — no long-lived AWS access keys
+- Live visitor API: API Gateway HTTP API + Lambda (Python 3.12) + DynamoDB, pytest-gated applies
+- Free-tier conscious: no NAT, ALB, or WAF on this personal stack
 
-### Optional future extensions
+## Architecture (current)
+
+```mermaid
+flowchart TB
+  Browser -->|HTTPS| CF[CloudFront + OAC]
+  CF --> S3[(Private S3)]
+  Browser -->|GET /visitors| APIGW[API Gateway]
+  APIGW --> Lambda
+  Lambda --> DDB[(DynamoDB)]
+  GHA[GitHub Actions OIDC] --> CF
+  GHA --> S3
+  GHA --> APIGW
+```
+
+- **S3 bucket** (private, no public access) — static website files
+- **CloudFront** with Origin Access Control — HTTPS CDN
+- **Visitor counter** — API Gateway HTTP API + Lambda + DynamoDB (live)
+- **Custom domain** — ACM certificate; www → apex redirect at the edge
+- **Terraform remote state** in S3 with DynamoDB locking (`bootstrap/`)
+- **GitHub Actions OIDC** — plan on PR, apply on `main`
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full diagram, CI/CD, and runbooks.
+
+### Optional later
 
 - WAF
 - Multi-environment (staging)
@@ -152,10 +178,10 @@ After bootstrap, add the following **Repository Variables** in GitHub:
 
 Go to: `Settings → Secrets and variables → Actions → Variables`
 
-| Variable Name     | Value                                      |
-|-------------------|--------------------------------------------|
-| `AWS_ROLE_ARN`    | (from bootstrap output)                    |
-| `AWS_REGION`      | `us-east-1` (or your region)               |
+| Variable Name  | Value                        |
+| -------------- | ---------------------------- |
+| `AWS_ROLE_ARN` | (from bootstrap output)      |
+| `AWS_REGION`   | `us-east-1` (or your region) |
 
 The workflows already reference these variables.
 
@@ -273,19 +299,15 @@ Once complete, CloudFront will be updated to use your real domain with a proper 
 - After the domain is working, you can set `create_route53_zone = false` and put the zone ID in `route53_zone_id` for future applies.
 - The www → apex redirect is handled by a **CloudFront Function** (free, runs at the edge, no Lambda@Edge cost).
 
-## Extending for the Full Cloud Resume Challenge
+## Challenge status
 
-The folder structure is designed for easy extension:
+Visitor counter, custom domain, OIDC CI/CD, and Lambda tests are **live**. Remaining product work lives in the frontend (PDF resume, Playwright). Optional infra later: WAF or a staging environment.
 
-1. Add `database.tf` in `environments/prod/` for the DynamoDB visitor counter table
-2. Add `compute.tf` for the Lambda function + API Gateway
-3. Add `api.tf` or combine into one file
-4. Update the IAM policy in bootstrap if the Lambda needs extra permissions
-5. Add custom domain + ACM in a new `dns.tf`
+CI already runs `terraform fmt -check` and `terraform validate` before plan.
 
 ## Troubleshooting
 
-**"Bucket name already exists"**  
+**"Bucket name already exists"**
 S3 bucket names are global. Change `website_bucket_name` to something more unique.
 
 **GitHub Actions fails with "AccessDenied"**
@@ -311,21 +333,15 @@ S3 bucket names are global. Change `website_bucket_name` to something more uniqu
 - After the registrar lock expires, change nameservers, set
   `create_route53_zone = true`, and re-apply.
 
-**CloudFront shows old content**  
+**CloudFront shows old content**
 Run an invalidation:
 ```bash
 aws cloudfront create-invalidation --distribution-id <ID> --paths "/*"
 ```
 
-**Terraform wants to destroy the S3 bucket on every apply**  
+**Terraform wants to destroy the S3 bucket on every apply**
 Never manually delete objects outside of Terraform. Use `lifecycle { prevent_destroy = true }` on the bucket if needed.
 
 ## License
 
 MIT — see [LICENSE](LICENSE) file.
-
----
-
-**Next milestone**: Add the Lambda + API Gateway + DynamoDB visitor counter.
-
-Happy building! 🚀
