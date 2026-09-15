@@ -93,6 +93,35 @@ variable "visitor_counter_function_name" {
   default     = "cloudresume-visitor-counter"
 }
 
+variable "visitor_counter_seed_hits" {
+  description = "Initial DynamoDB hits value when the counter item is first created (0 = clean baseline). Does not overwrite on later applies; use scripts/reset-visitor-counter.sh to reset production."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.visitor_counter_seed_hits >= 0
+    error_message = "visitor_counter_seed_hits must be zero or a positive integer."
+  }
+}
+
+variable "visitor_counter_local_dev_origins" {
+  description = "Extra CORS/Lambda allowlist origins for local frontend dev (never use *)."
+  type        = list(string)
+  default     = ["http://127.0.0.1:8000", "http://localhost:8000"]
+}
+
+variable "visitor_counter_throttle_rate" {
+  description = "API Gateway steady-state request rate (requests/sec) for GET /visitors. Excess returns 429."
+  type        = number
+  default     = 2
+}
+
+variable "visitor_counter_throttle_burst" {
+  description = "API Gateway burst request limit for GET /visitors."
+  type        = number
+  default     = 5
+}
+
 # =============================================================================
 # Security monitoring (free tier)
 # =============================================================================

@@ -16,6 +16,9 @@ import pytest
 from moto import mock_aws
 
 
+ALLOWED_ORIGIN = "https://stephenmckitrick.com"
+
+
 @pytest.fixture
 def handler():
     """Yield the handler module with a moto-mocked DynamoDB table."""
@@ -33,6 +36,21 @@ def handler():
 
         importlib.reload(handler_module)
         yield handler_module
+
+
+def _browser_event(**overrides):
+    headers = {
+        "origin": ALLOWED_ORIGIN,
+        "referer": f"{ALLOWED_ORIGIN}/",
+        "user-agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+    }
+    headers.update(overrides.get("headers") or {})
+    event = {"headers": headers}
+    event.update({k: v for k, v in overrides.items() if k != "headers"})
+    return event
 
 
 def _options_event():
@@ -56,7 +74,7 @@ def test_options_preflight_does_not_increment_counter(handler):
     for _ in range(5):
         handler.lambda_handler(_options_event(), context=None)
 
-    real = handler.lambda_handler({}, context=None)
+    real = handler.lambda_handler(_browser_event(), context=None)
     assert json.loads(real["body"])["count"] == 1, (
         "CORS preflights must not increment the visitor counter"
     )
@@ -68,7 +86,7 @@ def test_options_preflight_does_not_increment_counter(handler):
 
 
 def test_first_request_returns_count_one(handler):
-    response = handler.lambda_handler({}, context=None)
+    response = handler.lambda_handler(_browser_event(), context=None)
 
     assert response["statusCode"] == 200
     body = json.loads(response["body"])
@@ -80,7 +98,7 @@ def test_first_request_returns_count_one(handler):
 
 def test_count_increments_atomically_across_calls(handler):
     counts = [
-        json.loads(handler.lambda_handler({}, context=None)["body"])["count"]
+        json.loads(handler.lambda_handler(_browser_event(), context=None)["body"])["count"]
         for _ in range(5)
     ]
 
@@ -90,12 +108,79 @@ def test_count_increments_atomically_across_calls(handler):
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# Bot / scraper rejection
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def test_rejects_missing_origin_and_referer_without_increment(handler):
+    response = handler.lambda_handler(
+        {
+            "headers": {
+                "user-agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+            }
+        },
+        context=None,
+    )
+
+    assert response["statusCode"] == 403
+    assert json.loads(response["body"]) == {"error": "forbidden"}
+
+    follow_up = handler.lambda_handler(_browser_event(), context=None)
+    assert json.loads(follow_up["body"])["count"] == 1
+
+
+def test_rejects_empty_user_agent_without_increment(handler):
+    response = handler.lambda_handler(
+        _browser_event(headers={"user-agent": "", "origin": ALLOWED_ORIGIN}),
+        context=None,
+    )
+
+    assert response["statusCode"] == 403
+
+    follow_up = handler.lambda_handler(_browser_event(), context=None)
+    assert json.loads(follow_up["body"])["count"] == 1
+
+
+def test_rejects_known_scraper_user_agents_without_increment(handler):
+    for user_agent in ("curl/8.5.0", "python-requests/2.31.0", "Googlebot/2.1"):
+        response = handler.lambda_handler(
+            _browser_event(headers={"user-agent": user_agent}),
+            context=None,
+        )
+        assert response["statusCode"] == 403, user_agent
+
+    follow_up = handler.lambda_handler(_browser_event(), context=None)
+    assert json.loads(follow_up["body"])["count"] == 1
+
+
+def test_accepts_valid_referer_when_origin_missing(handler):
+    response = handler.lambda_handler(
+        {
+            "headers": {
+                "referer": f"{ALLOWED_ORIGIN}/resume",
+                "user-agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+            }
+        },
+        context=None,
+    )
+
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"]) == {"count": 1}
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Response shape
 # ──────────────────────────────────────────────────────────────────────────
 
 
 def test_response_headers_set_json_and_no_store(handler):
-    response = handler.lambda_handler({}, context=None)
+    response = handler.lambda_handler(_browser_event(), context=None)
 
     assert response["headers"]["Content-Type"] == "application/json"
     assert response["headers"]["Cache-Control"] == "no-store", (
@@ -104,7 +189,7 @@ def test_response_headers_set_json_and_no_store(handler):
 
 
 def test_response_body_is_valid_json_string(handler):
-    response = handler.lambda_handler({}, context=None)
+    response = handler.lambda_handler(_browser_event(), context=None)
 
     # If body is not a string, API Gateway integration will 502.
     assert isinstance(response["body"], str)
