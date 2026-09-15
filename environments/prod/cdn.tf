@@ -93,7 +93,7 @@ resource "aws_cloudfront_distribution" "website" {
   comment             = "CloudResumeChallenge static website - ${var.environment}"
   default_root_object = "index.html"
   price_class         = var.cloudfront_price_class
-  web_acl_id          = null # Add WAF ARN here later if desired (costs money)
+  web_acl_id          = null # Intentionally unset. Paid WAF is out of scope for this free-tier stack.
 
   # Use custom domain(s) when provided
   aliases = var.domain_name != "" ? concat([var.domain_name], var.subject_alternative_names) : []

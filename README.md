@@ -42,10 +42,7 @@ flowchart TB
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full diagram, CI/CD, and runbooks.  
 Visitor counter reset and bot-protection details: [docs/VISITOR_COUNTER.md](docs/VISITOR_COUNTER.md).
 
-### Optional later
-
-- WAF
-- Multi-environment (staging)
+This stack is **complete for CRC / free-tier scope**. AWS WAF (~$5/month idle) and a second staging account are deliberate omissions, not unfinished work. Bot control is API Gateway throttling plus Lambda origin/UA checks. Shield Standard is already on CloudFront.
 
 ## Repository Structure
 
@@ -308,7 +305,7 @@ Once complete, CloudFront will be updated to use your real domain with a proper 
 
 ## Challenge status
 
-Visitor counter, custom domain, OIDC CI/CD, and Lambda tests are **live**. Optional later: WAF or a staging environment. Reset an inflated count with `make reset-visitor-counter`.
+Visitor counter, custom domain, OIDC CI/CD, and Lambda tests are **live**. Reset an inflated count with `make reset-visitor-counter`.
 
 CI already runs `terraform fmt -check` and `terraform validate` before plan.
 

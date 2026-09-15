@@ -94,7 +94,7 @@ Controls aligned with [AWS security documentation](https://docs.aws.amazon.com/w
 
 ### Not used (paid or unnecessary for this project)
 
-- **AWS WAF** — `web_acl_id` remains null on CloudFront (`cdn.tf`)
+- **AWS WAF** — `web_acl_id` is intentionally `null` on CloudFront (`cdn.tf`). Not a pending task.
 - **Shield Advanced** — subscription service; Shield Standard is sufficient
 - **GuardDuty / AWS Config** — ongoing cost; not required for static resume scope
 - **Access Analyzer internal/unused** — paid analyzer types excluded
