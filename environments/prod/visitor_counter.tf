@@ -35,24 +35,10 @@ resource "aws_dynamodb_table" "visitor_counter" {
   })
 }
 
-# Baseline counter item (hits = visitor_counter_seed_hits, default 0).
-# lifecycle.ignore_changes keeps normal traffic increments; reset via
+# Do not manage the live counter item in Terraform. The table already has
+# id=visitor-counter in production; a seed PutItem fails with
+# ConditionalCheckFailedException. Reset hits with
 # scripts/reset-visitor-counter.sh or `make reset-visitor-counter`.
-resource "aws_dynamodb_table_item" "visitor_counter_baseline" {
-  count = local.visitor_counter_enabled ? 1 : 0
-
-  table_name = aws_dynamodb_table.visitor_counter[0].name
-  hash_key   = aws_dynamodb_table.visitor_counter[0].hash_key
-
-  item = jsonencode({
-    id   = { S = "visitor-counter" }
-    hits = { N = tostring(var.visitor_counter_seed_hits) }
-  })
-
-  lifecycle {
-    ignore_changes = [item]
-  }
-}
 
 # ------------------------------------------------------------------------------
 # Lambda — increment counter on each GET

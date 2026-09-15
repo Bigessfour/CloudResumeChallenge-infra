@@ -308,7 +308,7 @@ Once complete, CloudFront will be updated to use your real domain with a proper 
 
 ## Challenge status
 
-Visitor counter, custom domain, OIDC CI/CD, and Lambda tests are **live**. Remaining product work lives in the frontend (PDF resume, Playwright). Optional infra later: WAF or a staging environment.
+Visitor counter, custom domain, OIDC CI/CD, and Lambda tests are **live**. Optional later: WAF or a staging environment. Reset an inflated count with `make reset-visitor-counter`.
 
 CI already runs `terraform fmt -check` and `terraform validate` before plan.
 

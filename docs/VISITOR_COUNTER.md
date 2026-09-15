@@ -53,11 +53,9 @@ cd environments/prod
 terraform output -raw visitor_counter_table_name
 ```
 
-### Option B — Terraform baseline item (first deploy only)
+### Option B — first deploy only
 
-Terraform seeds the DynamoDB item at `visitor_counter_seed_hits` (default **0**) via `aws_dynamodb_table_item.visitor_counter_baseline`. `lifecycle { ignore_changes = [item] }` prevents every `terraform apply` from wiping live traffic counts.
-
-To re-seed via Terraform (rare): temporarily remove `ignore_changes`, set `visitor_counter_seed_hits = 0`, apply, then restore `ignore_changes`. Prefer **Option A** for day-to-day resets.
+If the table is empty, the first legitimate `GET /visitors` from the site creates the item via `UpdateItem ADD`. Do not seed the live item from Terraform — a create-if-missing PutItem fails when the row already exists.
 
 ## Verify after deploy
 
