@@ -39,7 +39,8 @@ flowchart TB
 - **Terraform remote state** in S3 with DynamoDB locking (`bootstrap/`)
 - **GitHub Actions OIDC** — plan on PR, apply on `main`
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full diagram, CI/CD, and runbooks.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full diagram, CI/CD, and runbooks.  
+Visitor counter reset and bot-protection details: [docs/VISITOR_COUNTER.md](docs/VISITOR_COUNTER.md).
 
 ### Optional later
 
@@ -194,6 +195,12 @@ The workflows already reference these variables.
 ## Common Commands
 
 ```bash
+# Reset inflated visitor counter (requires your AWS credentials — see docs/VISITOR_COUNTER.md)
+make reset-visitor-counter
+
+# Run visitor counter Lambda tests
+make test-visitor-counter
+
 # Bootstrap (first time only)
 cd bootstrap && terraform init && terraform apply
 

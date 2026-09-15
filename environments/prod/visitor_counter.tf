@@ -5,13 +5,13 @@
 locals {
   visitor_counter_enabled = var.enable_visitor_counter
 
-  visitor_cors_origins = local.visitor_counter_enabled ? compact([
-    var.domain_name != "" ? "https://${var.domain_name}" : null,
-    var.domain_name != "" && contains(var.subject_alternative_names, "www.${var.domain_name}") ? "https://www.${var.domain_name}" : null,
-    "https://${aws_cloudfront_distribution.website.domain_name}",
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-  ]) : []
+  # Production site origins only (no wildcard, no CloudFront default domain).
+  # Localhost entries support `python -m http.server` during frontend dev.
+  visitor_cors_origins = local.visitor_counter_enabled ? compact(concat(
+    var.domain_name != "" ? ["https://${var.domain_name}"] : [],
+    var.domain_name != "" && contains(var.subject_alternative_names, "www.${var.domain_name}") ? ["https://www.${var.domain_name}"] : [],
+    var.visitor_counter_local_dev_origins,
+  )) : []
 }
 
 # ------------------------------------------------------------------------------
@@ -33,6 +33,25 @@ resource "aws_dynamodb_table" "visitor_counter" {
     Name    = "CloudResumeChallenge Visitor Counter"
     Purpose = "Visitor count storage"
   })
+}
+
+# Baseline counter item (hits = visitor_counter_seed_hits, default 0).
+# lifecycle.ignore_changes keeps normal traffic increments; reset via
+# scripts/reset-visitor-counter.sh or `make reset-visitor-counter`.
+resource "aws_dynamodb_table_item" "visitor_counter_baseline" {
+  count = local.visitor_counter_enabled ? 1 : 0
+
+  table_name = aws_dynamodb_table.visitor_counter[0].name
+  hash_key   = aws_dynamodb_table.visitor_counter[0].hash_key
+
+  item = jsonencode({
+    id   = { S = "visitor-counter" }
+    hits = { N = tostring(var.visitor_counter_seed_hits) }
+  })
+
+  lifecycle {
+    ignore_changes = [item]
+  }
 }
 
 # ------------------------------------------------------------------------------
@@ -116,8 +135,9 @@ resource "aws_lambda_function" "visitor_counter" {
 
   environment {
     variables = {
-      TABLE_NAME  = aws_dynamodb_table.visitor_counter[0].name
-      COUNTER_KEY = "visitor-counter"
+      TABLE_NAME        = aws_dynamodb_table.visitor_counter[0].name
+      COUNTER_KEY       = "visitor-counter"
+      ALLOWED_ORIGINS   = join(",", local.visitor_cors_origins)
     }
   }
 
@@ -188,8 +208,8 @@ resource "aws_apigatewayv2_stage" "visitor_counter" {
   auto_deploy = true
 
   default_route_settings {
-    throttling_burst_limit = 10
-    throttling_rate_limit  = 5
+    throttling_burst_limit = var.visitor_counter_throttle_burst
+    throttling_rate_limit  = var.visitor_counter_throttle_rate
   }
 
   tags = local.common_tags

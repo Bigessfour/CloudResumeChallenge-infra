@@ -68,7 +68,7 @@ One-time (or rare) setup using local AWS credentials:
 | Static site | Private S3 bucket + CloudFront OAC | No public bucket access; only CloudFront can read objects |
 | HTTPS | ACM cert in `us-east-1` (CloudFront requirement) | DNS validation via Route 53 records |
 | Custom domain | `stephenmckitrick.com` + `www` redirect | CloudFront Function redirects www → apex |
-| Visitor counter | API Gateway HTTP API → Lambda → DynamoDB | Atomic `ADD` increment; CORS limited to site origins; throttled; concurrency capped |
+| Visitor counter | API Gateway HTTP API → Lambda → DynamoDB | Atomic `ADD` increment; CORS allowlist (production origins); throttled; Lambda rejects scraper traffic |
 | DNS (current) | Porkbun nameservers | Route 53 records exist for future NS cutover (~60 days) |
 
 ## Security and resilience (free tier)
@@ -85,8 +85,9 @@ Controls aligned with [AWS security documentation](https://docs.aws.amazon.com/w
 | **GitHub OIDC** | No long-lived AWS keys in CI; temporary STS credentials | [GitHub Actions + IAM roles](https://aws.amazon.com/blogs/security/use-iam-roles-to-connect-github-actions-to-actions-in-aws/) |
 | **OIDC scoped to `main`** | Trust policy limits role assumption to `main` branch only | Same as above |
 | **API Gateway throttling** | HTTP API stage rate/burst limits (429 on excess) | [HTTP API throttling](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-throttling.html) |
+| **Lambda origin / UA checks** | Rejects scraper-style calls (bad Origin/Referer, empty UA, known bot UAs); 403 without increment | `lambda/visitor_counter/handler.py` |
 | **Lambda least privilege** | Execution role limited to DynamoDB `GetItem`/`UpdateItem` on counter table | IAM role in `visitor_counter.tf` |
-| **Lambda concurrency cap** | Reserved concurrency limits parallel executions during abuse | `visitor_counter.tf` |
+| **Lambda reserved concurrency** | Not set — account quota requires ≥10 unreserved; see comment in `visitor_counter.tf` | [Lambda concurrency](https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html) |
 | **IAM Access Analyzer** | External-access analyzer detects unintended public/cross-account access | [Access Analyzer](https://docs.aws.amazon.com/IAM/latest/UserGuide/what-is-access-analyzer.html) |
 | **AWS Budgets alerts** | Monthly cost budget with email notifications (optional; email in tfvars only) | [AWS Budgets pricing](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/) |
 | **CloudWatch alarms** | Lambda error and high-invocation alarms on standard metrics | [CloudWatch pricing (free tier)](https://aws.amazon.com/cloudwatch/pricing/) |
@@ -182,6 +183,14 @@ terraform output -raw visitor_api_url
 ```
 
 Set that value as the `VISITOR_API_URL` repository variable in the frontend GitHub repo.
+
+### Reset visitor counter
+
+See [VISITOR_COUNTER.md](VISITOR_COUNTER.md) for resetting inflated counts and bot-protection details.
+
+```bash
+make reset-visitor-counter   # requires AWS CLI + your credentials
+```
 
 ## Lessons learned (portfolio narrative)
 

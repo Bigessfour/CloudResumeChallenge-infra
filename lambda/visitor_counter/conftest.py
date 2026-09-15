@@ -13,6 +13,7 @@ import os
 
 os.environ.setdefault("TABLE_NAME", "visitor-counter-test")
 os.environ.setdefault("COUNTER_KEY", "visitor-counter")
+os.environ.setdefault("ALLOWED_ORIGINS", "https://stephenmckitrick.com,https://www.stephenmckitrick.com")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
