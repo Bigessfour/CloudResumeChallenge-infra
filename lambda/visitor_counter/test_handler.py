@@ -46,6 +46,8 @@ def _browser_event(**overrides):
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         ),
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "cors",
     }
     headers.update(overrides.get("headers") or {})
     event = {"headers": headers}
@@ -156,6 +158,43 @@ def test_rejects_known_scraper_user_agents_without_increment(handler):
     assert json.loads(follow_up["body"])["count"] == 1
 
 
+def test_rejects_spoofed_origin_without_sec_fetch_headers(handler):
+    response = handler.lambda_handler(
+        {
+            "headers": {
+                "origin": ALLOWED_ORIGIN,
+                "user-agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+            }
+        },
+        context=None,
+    )
+
+    assert response["statusCode"] == 403
+    follow_up = handler.lambda_handler(_browser_event(), context=None)
+    assert json.loads(follow_up["body"])["count"] == 1
+
+
+def test_rejects_chrome_devtools_headless_without_increment(handler):
+    response = handler.lambda_handler(
+        _browser_event(
+            headers={
+                "user-agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36"
+                )
+            }
+        ),
+        context=None,
+    )
+
+    assert response["statusCode"] == 403
+    follow_up = handler.lambda_handler(_browser_event(), context=None)
+    assert json.loads(follow_up["body"])["count"] == 1
+
+
 def test_accepts_valid_referer_when_origin_missing(handler):
     response = handler.lambda_handler(
         {
@@ -165,6 +204,8 @@ def test_accepts_valid_referer_when_origin_missing(handler):
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 ),
+                "sec-fetch-site": "cross-site",
+                "sec-fetch-mode": "cors",
             }
         },
         context=None,

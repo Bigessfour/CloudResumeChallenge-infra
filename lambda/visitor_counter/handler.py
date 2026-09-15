@@ -55,6 +55,15 @@ def _is_allowed_request(event):
     if not user_agent or BOT_USER_AGENT.search(user_agent):
         return False
 
+    # Real browsers send Sec-Fetch-* on the site's CORS GET. curl/wget and
+    # most scrapers can spoof Origin but do not send these.
+    fetch_site = (_get_header(event, "sec-fetch-site") or "").lower()
+    fetch_mode = (_get_header(event, "sec-fetch-mode") or "").lower()
+    if fetch_site not in ("same-origin", "same-site", "cross-site"):
+        return False
+    if fetch_mode not in ("cors", "navigate"):
+        return False
+
     origin = _get_header(event, "origin")
     if origin and origin in ALLOWED_ORIGINS:
         return True
