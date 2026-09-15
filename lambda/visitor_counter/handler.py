@@ -47,48 +47,18 @@ def lambda_handler(event, context):
 
 
 def _is_allowed_request(event):
-    """Accept first-party browser traffic; reject direct scraper-style calls."""
-    if not ALLOWED_ORIGINS:
-        return True
-
-    user_agent = (_get_header(event, "user-agent") or "").strip()
-    if not user_agent or BOT_USER_AGENT.search(user_agent):
-        return False
-
-    # Real browsers send Sec-Fetch-* on the site's CORS GET. curl/wget and
-    # most scrapers can spoof Origin but do not send these.
-    fetch_site = (_get_header(event, "sec-fetch-site") or "").lower()
-    fetch_mode = (_get_header(event, "sec-fetch-mode") or "").lower()
-    if fetch_site not in ("same-origin", "same-site", "cross-site"):
-        return False
-    if fetch_mode not in ("cors", "navigate"):
-        return False
-
-    origin = _get_header(event, "origin")
-    if origin and origin in ALLOWED_ORIGINS:
-        return True
-
-    referer = _get_header(event, "referer")
-    if referer and _referer_allowed(referer):
-        return True
-
-    return False
-
-
-def _referer_allowed(referer):
-    for allowed in ALLOWED_ORIGINS:
-        if referer == allowed or referer.startswith(f"{allowed}/"):
-            return True
-    return False
-
-
-def _get_header(event, name):
-    headers = event.get("headers") or {}
-    name_lower = name.lower()
-    for key, value in headers.items():
-        if key.lower() == name_lower:
-            return value
-    return None
+    """Accept first-party CORS browser traffic; reject scraper-style calls."""
+    headers = {key.lower(): (value or "") for key, value in (event.get("headers") or {}).items()}
+    user_agent = headers.get("user-agent", "").strip()
+    return bool(
+        ALLOWED_ORIGINS
+        and user_agent
+        and not BOT_USER_AGENT.search(user_agent)
+        and headers.get("sec-fetch-site", "").lower()
+        in {"cross-site", "same-origin", "same-site"}
+        and headers.get("sec-fetch-mode", "").lower() in {"cors", "navigate"}
+        and headers.get("origin") in ALLOWED_ORIGINS
+    )
 
 
 def _response(status_code, body):

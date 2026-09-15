@@ -16,7 +16,7 @@ The frontend expects JSON: `{"count": N}` (see `CloudResumeChallenge-frontend/js
 |-------|---------|
 | **CORS** | Allowlist only: `https://stephenmckitrick.com`, `https://www.stephenmckitrick.com`, plus localhost dev origins. No `*`, no CloudFront default domain. |
 | **API Gateway throttling** | Stage defaults: **2 req/s** steady, **5** burst (429 when exceeded). Tunable via `visitor_counter_throttle_rate` / `visitor_counter_throttle_burst` in `terraform.tfvars`. |
-| **Lambda validation** | Rejects empty/bot User-Agents (curl, scrapers, HeadlessChrome / DevTools agents), missing allowlisted `Origin`/`Referer`, and requests without browser `Sec-Fetch-Site` / `Sec-Fetch-Mode`. Rejected calls return **403** and **do not increment**. |
+| **Lambda validation** | Fail-closed allowlist. Rejects empty/bot User-Agents (curl, scrapers, HeadlessChrome / DevTools agents), missing allowlisted `Origin`, and requests without browser `Sec-Fetch-Site` / `Sec-Fetch-Mode`. Referer alone is not enough. Rejected calls return **403** and **do not increment**. |
 | **OPTIONS preflight** | Still returns 200 and never increments. |
 | **CloudWatch alarms** | Daily invocation threshold + error alarm (see `security.tf`). |
 | **Reserved concurrency** | **Not set** — account quota is 10 unreserved minimum; see comment in `visitor_counter.tf`. |

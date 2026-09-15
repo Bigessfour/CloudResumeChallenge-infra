@@ -85,7 +85,7 @@ Controls aligned with [AWS security documentation](https://docs.aws.amazon.com/w
 | **GitHub OIDC** | No long-lived AWS keys in CI; temporary STS credentials | [GitHub Actions + IAM roles](https://aws.amazon.com/blogs/security/use-iam-roles-to-connect-github-actions-to-actions-in-aws/) |
 | **OIDC scoped to `main`** | Trust policy limits role assumption to `main` branch only | Same as above |
 | **API Gateway throttling** | HTTP API stage rate/burst limits (429 on excess) | [HTTP API throttling](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-throttling.html) |
-| **Lambda origin / UA checks** | Rejects scraper-style calls (bad Origin/Referer, empty UA, known bot UAs); 403 without increment | `lambda/visitor_counter/handler.py` |
+| **Lambda origin / UA checks** | Rejects scraper-style calls (missing allowlisted Origin, empty/bot UA, missing Sec-Fetch headers); 403 without increment | `lambda/visitor_counter/handler.py` |
 | **Lambda least privilege** | Execution role limited to DynamoDB `GetItem`/`UpdateItem` on counter table | IAM role in `visitor_counter.tf` |
 | **Lambda reserved concurrency** | Not set — account quota requires ≥10 unreserved; see comment in `visitor_counter.tf` | [Lambda concurrency](https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html) |
 | **IAM Access Analyzer** | External-access analyzer detects unintended public/cross-account access | [Access Analyzer](https://docs.aws.amazon.com/IAM/latest/UserGuide/what-is-access-analyzer.html) |

@@ -17,6 +17,10 @@ from moto import mock_aws
 
 
 ALLOWED_ORIGIN = "https://stephenmckitrick.com"
+BROWSER_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
 
 
 @pytest.fixture
@@ -38,21 +42,20 @@ def handler():
         yield handler_module
 
 
-def _browser_event(**overrides):
+def _browser_event(**header_overrides):
+    """Build a CORS browser event. Pass a header as None to omit it."""
     headers = {
         "origin": ALLOWED_ORIGIN,
-        "referer": f"{ALLOWED_ORIGIN}/",
-        "user-agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        ),
+        "user-agent": BROWSER_UA,
         "sec-fetch-site": "cross-site",
         "sec-fetch-mode": "cors",
     }
-    headers.update(overrides.get("headers") or {})
-    event = {"headers": headers}
-    event.update({k: v for k, v in overrides.items() if k != "headers"})
-    return event
+    for key, value in header_overrides.items():
+        if value is None:
+            headers.pop(key, None)
+        else:
+            headers[key] = value
+    return {"headers": headers}
 
 
 def _options_event():
@@ -114,18 +117,36 @@ def test_count_increments_atomically_across_calls(handler):
 # ──────────────────────────────────────────────────────────────────────────
 
 
-def test_rejects_missing_origin_and_referer_without_increment(handler):
-    response = handler.lambda_handler(
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"origin": None},
+        {"user-agent": ""},
+        {"user-agent": "curl/8.5.0"},
+        {"user-agent": "python-requests/2.31.0"},
+        {"user-agent": "Googlebot/2.1"},
+        {"sec-fetch-site": None, "sec-fetch-mode": None},
         {
-            "headers": {
-                "user-agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                )
-            }
+            "user-agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36"
+            )
         },
-        context=None,
-    )
+        {"origin": None, "referer": f"{ALLOWED_ORIGIN}/resume"},
+    ],
+    ids=(
+        "missing-origin",
+        "empty-ua",
+        "curl",
+        "python-requests",
+        "googlebot",
+        "origin-without-sec-fetch",
+        "headless-chrome",
+        "referer-only",
+    ),
+)
+def test_rejects_non_browser_without_increment(handler, headers):
+    response = handler.lambda_handler(_browser_event(**headers), context=None)
 
     assert response["statusCode"] == 403
     assert json.loads(response["body"]) == {"error": "forbidden"}
@@ -134,85 +155,13 @@ def test_rejects_missing_origin_and_referer_without_increment(handler):
     assert json.loads(follow_up["body"])["count"] == 1
 
 
-def test_rejects_empty_user_agent_without_increment(handler):
-    response = handler.lambda_handler(
-        _browser_event(headers={"user-agent": "", "origin": ALLOWED_ORIGIN}),
-        context=None,
-    )
+def test_rejects_when_allowlist_empty(handler):
+    handler.ALLOWED_ORIGINS = []
+
+    response = handler.lambda_handler(_browser_event(), context=None)
 
     assert response["statusCode"] == 403
-
-    follow_up = handler.lambda_handler(_browser_event(), context=None)
-    assert json.loads(follow_up["body"])["count"] == 1
-
-
-def test_rejects_known_scraper_user_agents_without_increment(handler):
-    for user_agent in ("curl/8.5.0", "python-requests/2.31.0", "Googlebot/2.1"):
-        response = handler.lambda_handler(
-            _browser_event(headers={"user-agent": user_agent}),
-            context=None,
-        )
-        assert response["statusCode"] == 403, user_agent
-
-    follow_up = handler.lambda_handler(_browser_event(), context=None)
-    assert json.loads(follow_up["body"])["count"] == 1
-
-
-def test_rejects_spoofed_origin_without_sec_fetch_headers(handler):
-    response = handler.lambda_handler(
-        {
-            "headers": {
-                "origin": ALLOWED_ORIGIN,
-                "user-agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                ),
-            }
-        },
-        context=None,
-    )
-
-    assert response["statusCode"] == 403
-    follow_up = handler.lambda_handler(_browser_event(), context=None)
-    assert json.loads(follow_up["body"])["count"] == 1
-
-
-def test_rejects_chrome_devtools_headless_without_increment(handler):
-    response = handler.lambda_handler(
-        _browser_event(
-            headers={
-                "user-agent": (
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36"
-                )
-            }
-        ),
-        context=None,
-    )
-
-    assert response["statusCode"] == 403
-    follow_up = handler.lambda_handler(_browser_event(), context=None)
-    assert json.loads(follow_up["body"])["count"] == 1
-
-
-def test_accepts_valid_referer_when_origin_missing(handler):
-    response = handler.lambda_handler(
-        {
-            "headers": {
-                "referer": f"{ALLOWED_ORIGIN}/resume",
-                "user-agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                ),
-                "sec-fetch-site": "cross-site",
-                "sec-fetch-mode": "cors",
-            }
-        },
-        context=None,
-    )
-
-    assert response["statusCode"] == 200
-    assert json.loads(response["body"]) == {"count": 1}
+    assert json.loads(response["body"]) == {"error": "forbidden"}
 
 
 # ──────────────────────────────────────────────────────────────────────────

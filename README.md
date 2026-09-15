@@ -42,7 +42,7 @@ flowchart TB
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full diagram, CI/CD, and runbooks.  
 Visitor counter reset and bot-protection details: [docs/VISITOR_COUNTER.md](docs/VISITOR_COUNTER.md).
 
-This stack is **complete for CRC / free-tier scope**. AWS WAF (~$5/month idle) and a second staging account are deliberate omissions, not unfinished work. Bot control is API Gateway throttling plus Lambda origin/UA checks. Shield Standard is already on CloudFront.
+This stack is **complete for CRC / free-tier scope**. AWS WAF (~$5/month idle) and a second staging account are deliberate omissions, not unfinished work. Bot control is API Gateway throttling plus Lambda Origin, UA, and Sec-Fetch checks. Shield Standard is already on CloudFront.
 
 ## Repository Structure
 
