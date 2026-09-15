@@ -135,9 +135,9 @@ resource "aws_lambda_function" "visitor_counter" {
 
   environment {
     variables = {
-      TABLE_NAME        = aws_dynamodb_table.visitor_counter[0].name
-      COUNTER_KEY       = "visitor-counter"
-      ALLOWED_ORIGINS   = join(",", local.visitor_cors_origins)
+      TABLE_NAME      = aws_dynamodb_table.visitor_counter[0].name
+      COUNTER_KEY     = "visitor-counter"
+      ALLOWED_ORIGINS = join(",", local.visitor_cors_origins)
     }
   }
 
